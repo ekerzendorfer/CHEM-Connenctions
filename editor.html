@@ -1,1 +1,304 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chemie-Mix | Datenbank-Editor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Macht Formel-Tags im Editor leicht sichtbar */
+        .preview-formula sub { vertical-align: sub; font-size: 0.75em; }
+        .preview-formula sup { vertical-align: super; font-size: 0.75em; }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans text-slate-800 pb-20">
 
+    <div class="max-w-5xl mx-auto px-4 py-8">
+        
+        <header class="bg-white p-6 rounded-3xl shadow-lg border border-slate-200 mb-8 flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl font-black text-blue-900 uppercase tracking-tighter italic">Chemie-Mix <span class="text-emerald-500">Editor</span></h1>
+                <p class="text-slate-500 font-bold text-sm tracking-widest uppercase">JSON Datenbank-Verwaltung</p>
+            </div>
+            <div class="flex gap-4">
+                <label class="bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-xl font-bold cursor-pointer transition-colors">
+                    📂 JSON Laden
+                    <input type="file" id="fileInput" accept=".json" class="hidden" onchange="loadJSON(event)">
+                </label>
+                <button onclick="downloadJSON()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold shadow-lg transition-colors">
+                    💾 JSON Herunterladen
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <div class="lg:col-span-1 bg-white p-6 rounded-3xl shadow-lg border border-slate-200 h-fit sticky top-6">
+                <h2 id="formTitle" class="text-xl font-black text-slate-800 uppercase mb-4">Neues Quartett</h2>
+                
+                <input type="hidden" id="editId" value="">
+
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Kapitel</label>
+                        <input type="text" id="f_chapter" list="chapterList" placeholder="z.B. Allgemeine Chemie" class="w-full p-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 outline-none font-bold">
+                        <datalist id="chapterList"></datalist>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Kategorie / Überbegriff</label>
+                        <input type="text" id="f_category" placeholder="z.B. Edelgase" class="w-full p-2 border-2 border-slate-200 rounded-lg focus:border-blue-500 outline-none font-bold text-blue-900">
+                    </div>
+
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                        <label class="block text-xs font-bold text-slate-500 uppercase">Die 4 Begriffe (Tipp: <sub> und <sup> erlaubt)</label>
+                        <input type="text" id="f_word1" placeholder="Begriff 1" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
+                        <input type="text" id="f_word2" placeholder="Begriff 2" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
+                        <input type="text" id="f_word3" placeholder="Begriff 3" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
+                        <input type="text" id="f_word4" placeholder="Begriff 4" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
+                    </div>
+
+                    <div class="flex gap-4">
+                        <div class="flex-1">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Niveau</label>
+                            <select id="f_level" class="w-full p-2 border-2 border-slate-200 rounded-lg font-bold outline-none">
+                                <option value="SEK1">SEK I</option>
+                                <option value="SEK2">SEK II</option>
+                                <option value="ALL">Beides</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 flex flex-col justify-center">
+                            <label class="flex items-center gap-2 cursor-pointer mt-5">
+                                <input type="checkbox" id="f_active" checked class="w-5 h-5 accent-emerald-500">
+                                <span class="text-sm font-bold text-slate-700">Aktiv (j)</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="pt-4 flex gap-2">
+                        <button onclick="saveEntry()" class="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl uppercase tracking-widest text-sm transition-colors">
+                            Speichern
+                        </button>
+                        <button onclick="resetForm()" class="bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold px-4 rounded-xl transition-colors" title="Abbrechen">
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="lg:col-span-2 space-y-4">
+                <div class="flex justify-between items-end">
+                    <h2 class="text-xl font-black text-slate-800 uppercase">Datenbank <span id="dbCount" class="text-blue-500 text-base">(0)</span></h2>
+                </div>
+
+                <div id="dbList" class="space-y-3">
+                    <div class="text-center p-10 bg-white rounded-3xl border border-slate-200 text-slate-400 font-bold">
+                        Noch keine Daten geladen. Beginne mit der Eingabe oder lade eine JSON-Datei.
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let db = [];
+        let nextId = 1;
+
+        // --- CORE FUNCTIONS ---
+
+        function saveEntry() {
+            const chap = document.getElementById('f_chapter').value.trim();
+            const cat = document.getElementById('f_category').value.trim();
+            const w1 = document.getElementById('f_word1').value.trim();
+            const w2 = document.getElementById('f_word2').value.trim();
+            const w3 = document.getElementById('f_word3').value.trim();
+            const w4 = document.getElementById('f_word4').value.trim();
+            const lvl = document.getElementById('f_level').value;
+            const act = document.getElementById('f_active').checked;
+            const editId = document.getElementById('editId').value;
+
+            if(!chap || !cat || !w1 || !w2 || !w3 || !w4) {
+                alert("Bitte alle Felder (Kapitel, Kategorie und 4 Begriffe) ausfüllen!");
+                return;
+            }
+
+            const entry = {
+                id: editId ? parseInt(editId) : nextId++,
+                chapter: chap,
+                category_name: cat,
+                level: lvl,
+                active: act,
+                words: [w1, w2, w3, w4]
+            };
+
+            if(editId) {
+                // Update
+                const index = db.findIndex(e => e.id === parseInt(editId));
+                if(index !== -1) db[index] = entry;
+            } else {
+                // Neu
+                db.push(entry);
+            }
+
+            resetForm();
+            renderList();
+        }
+
+        function editEntry(id) {
+            const entry = db.find(e => e.id === id);
+            if(!entry) return;
+
+            document.getElementById('editId').value = entry.id;
+            document.getElementById('f_chapter').value = entry.chapter;
+            document.getElementById('f_category').value = entry.category_name;
+            document.getElementById('f_word1').value = entry.words[0] || "";
+            document.getElementById('f_word2').value = entry.words[1] || "";
+            document.getElementById('f_word3').value = entry.words[2] || "";
+            document.getElementById('f_word4').value = entry.words[3] || "";
+            document.getElementById('f_level').value = entry.level || "SEK1";
+            document.getElementById('f_active').checked = entry.active !== false; // Default true
+
+            document.getElementById('formTitle').innerText = "Quartett bearbeiten";
+            document.getElementById('formTitle').classList.replace('text-slate-800', 'text-amber-600');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function deleteEntry(id) {
+            if(confirm("Diesen Eintrag wirklich löschen?")) {
+                db = db.filter(e => e.id !== id);
+                renderList();
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('editId').value = "";
+            // Kapitel lassen wir zur Bequemlichkeit oft stehen!
+            document.getElementById('f_category').value = "";
+            document.getElementById('f_word1').value = "";
+            document.getElementById('f_word2').value = "";
+            document.getElementById('f_word3').value = "";
+            document.getElementById('f_word4').value = "";
+            document.getElementById('f_active').checked = true;
+            
+            document.getElementById('formTitle').innerText = "Neues Quartett";
+            document.getElementById('formTitle').classList.replace('text-amber-600', 'text-slate-800');
+            
+            updateDatalist();
+        }
+
+        // --- RENDER & UI ---
+
+        function renderList() {
+            const listEl = document.getElementById('dbList');
+            document.getElementById('dbCount').innerText = `(${db.length})`;
+            
+            if(db.length === 0) {
+                listEl.innerHTML = `<div class="text-center p-10 bg-white rounded-3xl border border-slate-200 text-slate-400 font-bold">Keine Einträge vorhanden.</div>`;
+                return;
+            }
+
+            // Gruppieren nach Kapitel für schöne Übersicht
+            let grouped = {};
+            db.forEach(item => {
+                if(!grouped[item.chapter]) grouped[item.chapter] = [];
+                grouped[item.chapter].push(item);
+            });
+
+            let html = "";
+            for (let chap in grouped) {
+                html += `<h3 class="text-sm font-black text-slate-400 uppercase tracking-widest mt-6 mb-2 ml-2 border-b-2 border-slate-200 pb-1">${chap}</h3>`;
+                
+                grouped[chap].forEach(entry => {
+                    const statusClass = entry.active ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700 line-through opacity-60";
+                    const wordsHtml = entry.words.map(w => `<span class="bg-white px-2 py-1 rounded border border-slate-200 text-xs preview-formula">${w}</span>`).join('');
+                    
+                    html += `
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:border-blue-300 transition-colors">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-2 mb-2">
+                                <span class="${statusClass} px-2 py-0.5 rounded text-[10px] font-black uppercase tracking-widest">${entry.active ? 'Aktiv' : 'Inaktiv'}</span>
+                                <span class="bg-slate-100 text-slate-500 px-2 py-0.5 rounded text-[10px] font-black uppercase">${entry.level || 'SEK?'}</span>
+                                <strong class="text-blue-900">${entry.category_name}</strong>
+                            </div>
+                            <div class="flex flex-wrap gap-2">
+                                ${wordsHtml}
+                            </div>
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+                            <button onclick="editEntry(${entry.id})" class="flex-1 md:flex-none bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-2 rounded-lg font-bold text-xs uppercase transition-colors">✏️ Bearbeiten</button>
+                            <button onclick="deleteEntry(${entry.id})" class="flex-1 md:flex-none bg-red-100 text-red-700 hover:bg-red-200 px-3 py-2 rounded-lg font-bold text-xs uppercase transition-colors">🗑 Löschen</button>
+                        </div>
+                    </div>`;
+                });
+            }
+            listEl.innerHTML = html;
+            updateDatalist();
+        }
+
+        function updateDatalist() {
+            const list = document.getElementById('chapterList');
+            const chapters = [...new Set(db.map(item => item.chapter))];
+            list.innerHTML = chapters.map(c => `<option value="${c}">`).join('');
+        }
+
+        // --- FILE I/O ---
+
+        function loadJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if(Array.isArray(loadedData)) {
+                        db = loadedData;
+                        // Max ID finden, damit neue Einträge hochzählen
+                        let maxId = 0;
+                        db.forEach(item => { if(item.id > maxId) maxId = item.id; });
+                        nextId = maxId + 1;
+                        
+                        // Fehlende Keys sicherstellen (Rückwärtskompatibilität)
+                        db = db.map(item => ({
+                            ...item,
+                            level: item.level || "SEK1",
+                            active: item.active !== undefined ? item.active : true
+                        }));
+
+                        renderList();
+                        alert(`${db.length} Quartette erfolgreich geladen!`);
+                    } else {
+                        alert("Die Datei hat nicht das richtige Format (Array erwartet).");
+                    }
+                } catch (err) {
+                    alert("Fehler beim Parsen der JSON-Datei: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+            // Input zurücksetzen, falls man dieselbe Datei nochmal laden will
+            event.target.value = "";
+        }
+
+        function downloadJSON() {
+            if(db.length === 0) {
+                alert("Die Datenbank ist leer!"); return;
+            }
+            
+            // Formatieren: id, chapter, category_name, level, active, words
+            // Um es im Editor schön lesbar zu machen (2 Spaces Einrückung)
+            const jsonString = JSON.stringify(db, null, 2);
+            const blob = new Blob([jsonString], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = "chemie_mix_db.json";
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>

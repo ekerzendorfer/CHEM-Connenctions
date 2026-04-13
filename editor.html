@@ -51,11 +51,23 @@
                     </div>
 
                     <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
-                        <label class="block text-xs font-bold text-slate-500 uppercase">Die 4 Begriffe (Tipp: <sub> und <sup> erlaubt)</label>
-                        <input type="text" id="f_word1" placeholder="Begriff 1" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
-                        <input type="text" id="f_word2" placeholder="Begriff 2" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
-                        <input type="text" id="f_word3" placeholder="Begriff 3" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
-                        <input type="text" id="f_word4" placeholder="Begriff 4" class="w-full p-2 border border-slate-300 rounded font-mono text-sm">
+                        <div class="flex justify-between items-end mb-2">
+                            <label class="block text-xs font-bold text-slate-500 uppercase">Die 4 Begriffe</label>
+                            
+                            <div class="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+                                <button type="button" onclick="insertTag('sub')" class="bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 px-2 py-1 rounded text-xs font-bold border border-slate-300 transition-colors" title="Tiefgestellt (Index)">
+                                    X<sub>2</sub>
+                                </button>
+                                <button type="button" onclick="insertTag('sup')" class="bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 px-2 py-1 rounded text-xs font-bold border border-slate-300 transition-colors" title="Hochgestellt (Ladung)">
+                                    X<sup>2</sup>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <input type="text" id="f_word1" placeholder="Begriff 1" onfocus="setLastFocus(this)" class="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:border-blue-500 outline-none">
+                        <input type="text" id="f_word2" placeholder="Begriff 2" onfocus="setLastFocus(this)" class="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:border-blue-500 outline-none">
+                        <input type="text" id="f_word3" placeholder="Begriff 3" onfocus="setLastFocus(this)" class="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:border-blue-500 outline-none">
+                        <input type="text" id="f_word4" placeholder="Begriff 4" onfocus="setLastFocus(this)" class="w-full p-2 border border-slate-300 rounded font-mono text-sm focus:border-blue-500 outline-none">
                     </div>
 
                     <div class="flex gap-4">
@@ -104,6 +116,40 @@
     <script>
         let db = [];
         let nextId = 1;
+        let lastFocusedInput = null; // Speichert das aktuell ausgewählte Textfeld
+
+        // --- NEU: TEXT-FORMATIERUNG ---
+        
+        // Wird aufgerufen, sobald man in eines der 4 Felder klickt
+        function setLastFocus(element) {
+            lastFocusedInput = element;
+        }
+
+        // Fügt die Tags an der Cursorposition ein
+        function insertTag(tag) {
+            if (!lastFocusedInput) {
+                alert("Bitte klicke zuerst in eines der Begriffs-Felder, bevor du formatierst.");
+                return;
+            }
+
+            const input = lastFocusedInput;
+            const startPos = input.selectionStart;
+            const endPos = input.selectionEnd;
+            const text = input.value;
+            
+            const tagStr = `<${tag}></${tag}>`;
+            
+            // Text zusammensetzen: Vor dem Cursor + HTML-Tags + Nach dem Cursor
+            input.value = text.substring(0, startPos) + tagStr + text.substring(endPos);
+            
+            // Cursor exakt ZWISCHEN die beiden neuen HTML-Tags setzen
+            // Die Länge von <sub> ist 5, von <sup> ist 5.
+            const newCursorPos = startPos + tagStr.indexOf('>') + 1; 
+            input.setSelectionRange(newCursorPos, newCursorPos);
+            
+            // Fokus auf das Feld zurückgeben, damit man direkt weitertippen kann
+            input.focus();
+        }
 
         // --- CORE FUNCTIONS ---
 
@@ -133,11 +179,9 @@
             };
 
             if(editId) {
-                // Update
                 const index = db.findIndex(e => e.id === parseInt(editId));
                 if(index !== -1) db[index] = entry;
             } else {
-                // Neu
                 db.push(entry);
             }
 
@@ -157,7 +201,10 @@
             document.getElementById('f_word3').value = entry.words[2] || "";
             document.getElementById('f_word4').value = entry.words[3] || "";
             document.getElementById('f_level').value = entry.level || "SEK1";
-            document.getElementById('f_active').checked = entry.active !== false; // Default true
+            document.getElementById('f_active').checked = entry.active !== false; 
+
+            // Aktuelles Fokusfeld zurücksetzen, damit Tags nicht versehentlich ins letzte Feld rutschen
+            lastFocusedInput = null;
 
             document.getElementById('formTitle').innerText = "Quartett bearbeiten";
             document.getElementById('formTitle').classList.replace('text-slate-800', 'text-amber-600');
@@ -173,13 +220,14 @@
 
         function resetForm() {
             document.getElementById('editId').value = "";
-            // Kapitel lassen wir zur Bequemlichkeit oft stehen!
             document.getElementById('f_category').value = "";
             document.getElementById('f_word1').value = "";
             document.getElementById('f_word2').value = "";
             document.getElementById('f_word3').value = "";
             document.getElementById('f_word4').value = "";
             document.getElementById('f_active').checked = true;
+            
+            lastFocusedInput = null;
             
             document.getElementById('formTitle').innerText = "Neues Quartett";
             document.getElementById('formTitle').classList.replace('text-amber-600', 'text-slate-800');
@@ -198,7 +246,6 @@
                 return;
             }
 
-            // Gruppieren nach Kapitel für schöne Übersicht
             let grouped = {};
             db.forEach(item => {
                 if(!grouped[item.chapter]) grouped[item.chapter] = [];
@@ -254,12 +301,10 @@
                     const loadedData = JSON.parse(e.target.result);
                     if(Array.isArray(loadedData)) {
                         db = loadedData;
-                        // Max ID finden, damit neue Einträge hochzählen
                         let maxId = 0;
                         db.forEach(item => { if(item.id > maxId) maxId = item.id; });
                         nextId = maxId + 1;
                         
-                        // Fehlende Keys sicherstellen (Rückwärtskompatibilität)
                         db = db.map(item => ({
                             ...item,
                             level: item.level || "SEK1",
@@ -267,7 +312,6 @@
                         }));
 
                         renderList();
-                        alert(`${db.length} Quartette erfolgreich geladen!`);
                     } else {
                         alert("Die Datei hat nicht das richtige Format (Array erwartet).");
                     }
@@ -276,7 +320,6 @@
                 }
             };
             reader.readAsText(file);
-            // Input zurücksetzen, falls man dieselbe Datei nochmal laden will
             event.target.value = "";
         }
 
@@ -285,8 +328,6 @@
                 alert("Die Datenbank ist leer!"); return;
             }
             
-            // Formatieren: id, chapter, category_name, level, active, words
-            // Um es im Editor schön lesbar zu machen (2 Spaces Einrückung)
             const jsonString = JSON.stringify(db, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
             const url = URL.createObjectURL(blob);
